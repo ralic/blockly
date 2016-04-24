@@ -37,6 +37,10 @@ Blockly.Blocks.lists.HUE = 260;
 Blockly.Blocks['lists_create_empty'] = {
   /**
    * Block for creating an empty list.
+   * The 'list_create_with' block is preferred as it is more flexible.
+   * <block type="lists_create_with">
+   *   <mutation items="0"></mutation>
+   * </block>
    * @this Blockly.Block
    */
   init: function() {
@@ -90,12 +94,11 @@ Blockly.Blocks['lists_create_with'] = {
    * @this Blockly.Block
    */
   decompose: function(workspace) {
-    var containerBlock =
-        Blockly.Block.obtain(workspace, 'lists_create_with_container');
+    var containerBlock = workspace.newBlock('lists_create_with_container');
     containerBlock.initSvg();
     var connection = containerBlock.getInput('STACK').connection;
     for (var i = 0; i < this.itemCount_; i++) {
-      var itemBlock = Blockly.Block.obtain(workspace, 'lists_create_with_item');
+      var itemBlock = workspace.newBlock('lists_create_with_item');
       itemBlock.initSvg();
       connection.connect(itemBlock.previousConnection);
       connection = itemBlock.nextConnection;
@@ -116,13 +119,18 @@ Blockly.Blocks['lists_create_with'] = {
       itemBlock = itemBlock.nextConnection &&
           itemBlock.nextConnection.targetBlock();
     }
+    // Disconnect any children that don't belong.
+    for (var i = 0; i < this.itemCount_; i++) {
+      var connection = this.getInput('ADD' + i).connection.targetConnection;
+      if (connection && connections.indexOf(connection) == -1) {
+        connection.disconnect();
+      }
+    }
     this.itemCount_ = connections.length;
     this.updateShape_();
     // Reconnect any child blocks.
     for (var i = 0; i < this.itemCount_; i++) {
-      if (connections[i]) {
-        this.getInput('ADD' + i).connection.connect(connections[i]);
-      }
+      Blockly.Mutator.reconnect(connections[i], this, 'ADD' + i);
     }
   },
   /**
@@ -147,27 +155,25 @@ Blockly.Blocks['lists_create_with'] = {
    * @this Blockly.Block
    */
   updateShape_: function() {
-    // Delete everything.
-    if (this.getInput('EMPTY')) {
+    if (this.itemCount_ && this.getInput('EMPTY')) {
       this.removeInput('EMPTY');
-    } else {
-      var i = 0;
-      while (this.getInput('ADD' + i)) {
-        this.removeInput('ADD' + i);
-        i++;
-      }
-    }
-    // Rebuild block.
-    if (this.itemCount_ == 0) {
+    } else if (!this.itemCount_ && !this.getInput('EMPTY')) {
       this.appendDummyInput('EMPTY')
           .appendField(Blockly.Msg.LISTS_CREATE_EMPTY_TITLE);
-    } else {
-      for (var i = 0; i < this.itemCount_; i++) {
+    }
+    // Add new inputs.
+    for (var i = 0; i < this.itemCount_; i++) {
+      if (!this.getInput('ADD' + i)) {
         var input = this.appendValueInput('ADD' + i);
         if (i == 0) {
           input.appendField(Blockly.Msg.LISTS_CREATE_WITH_INPUT_WITH);
         }
       }
+    }
+    // Remove deleted inputs.
+    while (this.getInput('ADD' + i)) {
+      this.removeInput('ADD' + i);
+      i++;
     }
   }
 };
